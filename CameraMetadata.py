@@ -106,6 +106,7 @@ import re # for matching patterns, specifically looking for R3D sidecar quicktim
 from UserDict import UserDict
 
 # Custom dependencies
+from seq import seq # assuming the seq/ directory is a subdirectory
 from lxml import etree # for XDCAM metadata
 from pytimecode import PyTimeCode
 from pymediainfo import MediaInfo # for MOV, AVI, MP4, metadata
