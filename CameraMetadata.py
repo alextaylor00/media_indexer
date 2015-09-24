@@ -390,7 +390,8 @@ class R3DMetadata(FileInfo):
 
             # retrieve the output of this command
             # this will block until the output is ready
-            r3dmeta = p.communicate()[0]
+            # strip() will get rid of any spurious newlines at the start and end
+            r3dmeta = p.communicate()[0].strip()
 
             # retrieve headers and metadata
             headers = r3dmeta.splitlines()[0].split(",")
@@ -419,6 +420,9 @@ class R3DMetadata(FileInfo):
 
         except:
             pass # if there are any errors in the above, no fields except name will be set
+
+
+
         return self
 
 
