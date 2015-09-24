@@ -90,19 +90,26 @@ All extensions should be UPPERCASE
 """
 
 ExtensionHandlers = {
-                        "R3D":"R3DMetadata",
-                        "MOV":"VIDEOMetadata",
-                        "MP4":"VIDEOMetadata",
-                        "AVI":"VIDEOMetadata"
+                        "StreamingMedia": {
+                            "R3D":"R3DMetadata",
+                            "MOV":"VIDEOMetadata",
+                            "MP4":"VIDEOMetadata",
+                            "AVI":"VIDEOMetadata",
+                        },
+
+                        "SequenceMedia": {
+                            "EXR":"SEQMetadata",
+                            "ARI":"SEQMetadata",
+                            "DPX":"SEQMetadata"
+                        }
                      }
-
-
 
 # Standard python libraries
 import os
 import sys
 import subprocess # for calling REDline and returning output
 import re # for matching patterns, specifically looking for R3D sidecar quicktimes
+import pdb # for debugging purposes
 from UserDict import UserDict
 
 # Custom dependencies
@@ -126,6 +133,47 @@ class FileInfo(UserDict):
 def log(message):
     if DEBUG is True:
         print " %s" % message
+
+class SEQMetadata(FileInfo):
+    "retrieve metadata from file sequences, based on file metadata alone"
+
+    def tapename(self, filename):
+
+        if filename[0].find("%") >= 0:
+            return os.path.basename(os.path.dirname(filename[5])) # return the name of the containing folder
+        else:
+            return filename[0]
+
+
+
+    def __parse(self, filename):
+        self.clear()
+
+
+        src_in = PyTimeCode("23.98", frames=filename[2])
+        src_out = PyTimeCode("23.98", frames=filename[3]) + 1
+
+        # extract metadata here
+        self["format"] = filename[1][1:].upper()
+        self["filepath"] = filename[5]
+        self["tapename"] = self.tapename(filename)
+        self["source_in"] = src_in
+        self["source_out"] = src_out
+        self["duration"] = int(filename[3]) - int(filename[2]) + 1
+
+    def __setitem__(self, key, item):
+
+
+        if key == "name" and item:
+            p = self.__parse(item)
+
+            if p is False:
+                # return if parse was unable to parse (e.g. if file was not _001.R3D)
+                # this will result in an empty list {}, with a length of 0.
+                # it will be removed by listDirectory before being passed on.
+                return
+
+        FileInfo.__setitem__(self, key, item)
 
 
 class VIDEOMetadata(FileInfo):
@@ -424,7 +472,7 @@ class R3DMetadata(FileInfo):
 
 
 
-def listDirectory(directory, fileExtList):
+def listDirectory(directory, streamingExtList=ExtensionHandlers["StreamingMedia"].keys(), sequenceExtList=ExtensionHandlers["SequenceMedia"].keys()):
     "get list of file info objects for files of particular extensions"
 
     """
@@ -435,11 +483,12 @@ def listDirectory(directory, fileExtList):
     if os.path.isdir(directory) is False:
         return False
 
-    if type(fileExtList) is not list:
+    if type(streamingExtList) is not list:
         return False
 
+
     # normalize the extensions to uppercase
-    fileExtList = [e.upper() for e in fileExtList]
+    streamingExtList = [e.upper() for e in streamingExtList]
 
     # create a dictionary with all the files in the directory, normalized
     # http://docs.python.org/2/library/os.path.html#os.path.normcase
@@ -450,7 +499,10 @@ def listDirectory(directory, fileExtList):
     # at the same time, filter this list to only include qualifying extensions
     fileList = [os.path.join(directory, f)
                 for f in fileList
-                  if os.path.splitext(f)[1].upper()[1:] in fileExtList]
+                  if os.path.splitext(f)[1].upper()[1:] in streamingExtList]
+
+    # get a list of sequences (if any) in the current directory
+    seqList = seq.SequenceList(directory).GetSequences(False) # recursive=False
 
     def getFileInfoClass(filename, module=sys.modules[FileInfo.__module__]):
         "get file info class from filename extension"
@@ -461,10 +513,15 @@ def listDirectory(directory, fileExtList):
         # the module is the file that contains all of the metadata classes, in this case CameraMetadata.py
         # using this, it can use the extension of the filename to check and see
         # if there's a class that can process that kind of file (.e.g .r3d = R3DMetadata)
-        extension = os.path.splitext(filename)[1].upper()[1:]
+        if type(filename) is list:
+            extension = filename[1][1:].upper()
+            handlers = ExtensionHandlers["SequenceMedia"]
+        else:
+            extension = os.path.splitext(filename)[1].upper()[1:]
+            handlers = ExtensionHandlers["StreamingMedia"]
 
         try:
-            subclass = "%s" % ExtensionHandlers[extension] # based on extension, this will return the class name (e.g. R3DMetadata, VIDEOMetadata, etc)
+            subclass = "%s" % handlers[extension] # based on extension, this will return the class name (e.g. R3DMetadata, VIDEOMetadata, etc)
         except KeyError:
             subclass = extension # if the extension is registered, just pass the extension through and hope to get lucky
 
@@ -478,13 +535,23 @@ def listDirectory(directory, fileExtList):
     # R3DMetadata("file.r3d")
     #
     # The for loop will ensure that data is returned for every file in the fileList
+
+
     file_info = [getFileInfoClass(f)(f) for f in fileList]
 
     # Prune empty lists from file_info, in cases where a file was passed to a parser
     # but returned empty (e.g. an R3D file other than _001.R3D)
     file_info = [i for i in file_info if len(i) != 0]
 
+    if seqList:
+        import pdb; pdb.set_trace()
+        seqList = [s for s in seqList if s[1][1:].upper() in sequenceExtList]
+        seq_info = [getFileInfoClass(f)(f) for f in seqList]
+        file_info = file_info + seq_info
+
+
     log("listDirectory: file_info = %s" % str(file_info))
+
 
     return file_info
 

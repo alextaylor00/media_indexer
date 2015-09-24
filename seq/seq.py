@@ -266,7 +266,7 @@ class SequenceList():
     def Test(self):
 	print "testing.."
     
-    def GetSequences(self):
+    def GetSequences(self, recursive=True):
         # change working folder to input folder path
         os.chdir(self.sourcePath)
 	
@@ -336,6 +336,9 @@ class SequenceList():
 		else:	
 		    # if it's a normal file
 		    fileList.append(i)
+            
+            if recursive == False:
+                break
 	
 	for k in self.sequences.keys(): # for each sequence found
 	    self.sequences[k].sort() # sort the list of associated frame numbers

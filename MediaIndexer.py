@@ -39,8 +39,6 @@ import CameraMetadata
 
 # set up some default vars
 metadata            = [] # set up an empty dictionary to hold all the metadata we gather
-filetypes           = sorted(CameraMetadata.ExtensionHandlers.keys()) # all the filetypes supported in CameraMetadata will be searched for
-
 
 
 def log(message):
@@ -145,7 +143,8 @@ def indexer(rootpaths):
             msg("Searching %s..." % str(root))
 
             # gather metadata from current directory
-            m = CameraMetadata.listDirectory(root, filetypes)
+            m = CameraMetadata.listDirectory(root)
+    
 
             log("indexer: Results of metadata:")
             log([i for i in m]) # print each file's metadata
