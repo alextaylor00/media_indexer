@@ -129,10 +129,10 @@ class SEQMetadata(FileInfo):
 
     def tapename(self, filename):
 
-        if filename[0].find("%") >= 0:
+        if filename[0].find("%") == 0:
             return os.path.basename(os.path.dirname(filename[5])) # return the name of the containing folder
         else:
-            return filename[0]
+            return filename[0].split(".")[0]
 
 
     def parse(self, filename):
