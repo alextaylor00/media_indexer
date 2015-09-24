@@ -55,34 +55,24 @@ Each class should return AT LEAST the following metadata fields, if not more:
     duration
 
 Example class. Copy and paste this, name it accordingly, and add the
-format-specific metadata code. Nothing needs to be done with __setitem__.
+format-specific metadata code.
 
 class EXTMetadata(FileInfo):
     "retrieve metadata from EXT files"
 
-    def __parse(self, filename):
+    def parse(self, filename):
         self.clear()
 
         # extract metadata here
 
         # set metadata fields like this:
+        # self["name"] = filename
         # self["filepath"] = "value"
         # self["tapename"] = "value"
         # ...
 
-    def __setitem__(self, key, item):
-        # override setitem to parse the R3D file
+        return self
 
-        if key == "name" and item:
-            p = self.__parse(item)
-
-            if p is False:
-                # return if parse was unable to parse (e.g. if file was not _001.R3D)
-                # this will result in an empty list {}, with a length of 0.
-                # it will be removed by listDirectory before being passed on.
-                return
-
-        FileInfo.__setitem__(self, key, item)
 
 
 REGISTER the class below, to determine which extension gets handled by which class
@@ -126,7 +116,7 @@ class FileInfo(UserDict):
     # Extends the UserDict class, but always sets the "name" attribute
     def __init__(self, filename=None):
         UserDict.__init__(self)
-        self["name"] = filename
+        #self["name"] = filename
 
 
 
@@ -145,36 +135,21 @@ class SEQMetadata(FileInfo):
             return filename[0]
 
 
-
-    def __parse(self, filename):
+    def parse(self, filename):
         self.clear()
-
 
         src_in = PyTimeCode("23.98", frames=filename[2])
         src_out = PyTimeCode("23.98", frames=filename[3]) + 1
 
         # extract metadata here
+        self["name"] = filename[4]
         self["format"] = filename[1][1:].upper()
         self["filepath"] = filename[5]
         self["tapename"] = self.tapename(filename)
         self["source_in"] = src_in
         self["source_out"] = src_out
         self["duration"] = int(filename[3]) - int(filename[2]) + 1
-
-    def __setitem__(self, key, item):
-
-
-        if key == "name" and item:
-            p = self.__parse(item)
-
-            if p is False:
-                # return if parse was unable to parse (e.g. if file was not _001.R3D)
-                # this will result in an empty list {}, with a length of 0.
-                # it will be removed by listDirectory before being passed on.
-                return
-
-        FileInfo.__setitem__(self, key, item)
-
+        return self
 
 class VIDEOMetadata(FileInfo):
     "retrieve metadata from MOV, MP4, AVI, MXF, etc files (powered by MediaInfo)"
@@ -282,7 +257,7 @@ class VIDEOMetadata(FileInfo):
 
 
 
-    def __parse(self, filename):
+    def parse(self, filename):
         self.clear()
 
         qt_file = MediaInfo.parse(filename)
@@ -383,6 +358,7 @@ class VIDEOMetadata(FileInfo):
 
         # finish up
         # set metadata fields
+        self["name"]        = str(filename)
         self["format"]      = media_format
         self["filepath"]    = str(filename)
         self["tapename"]    = str(tapename)
@@ -390,28 +366,15 @@ class VIDEOMetadata(FileInfo):
         self["source_out"]  = str(tc_end)
         self["duration"]    = str(duration)
         self["framerate"]   = str(framerate_str)
+        return self
 
-
-    def __setitem__(self, key, item):
-        # override setitem to parse the R3D file
-
-        if key == "name" and item:
-            p = self.__parse(item)
-
-            if p is False:
-                # return if parse was unable to parse (e.g. if file was not _001.R3D)
-                # this will result in an empty list {}, with a length of 0.
-                # it will be removed by listDirectory before being passed on.
-                return
-
-        FileInfo.__setitem__(self, key, item)
 
 
 
 class R3DMetadata(FileInfo):
     "retrieve metadata from an R3D file"
 
-    def __parse(self, filename):
+    def parse(self, filename):
         self.clear()
 
         media_format = "r3d"
@@ -434,6 +397,7 @@ class R3DMetadata(FileInfo):
             metadata = r3dmeta.splitlines()[1].split(",")
 
             # retrieve specific metadata fields. more can be added in a similar fashion
+            self["name"]        = str(filename)
             self["format"]      = media_format
             self["filepath"]    = metadata[headers.index("File Path")]
             self["tapename"]    = metadata[headers.index("Clip Name")]
@@ -455,21 +419,7 @@ class R3DMetadata(FileInfo):
 
         except:
             pass # if there are any errors in the above, no fields except name will be set
-
-    def __setitem__(self, key, item):
-        # override setitem to parse the R3D file
-
-        if key == "name" and item:
-            p = self.__parse(item)
-
-            if p is False:
-                # return if parse was unable to parse (e.g. if file was not _001.R3D)
-                # this will result in an empty list {}, with a length of 0.
-                # it will be removed by listDirectory before being passed on.
-                return
-
-        FileInfo.__setitem__(self, key, item)
-
+        return self
 
 
 def listDirectory(directory, streamingExtList=ExtensionHandlers["StreamingMedia"].keys(), sequenceExtList=ExtensionHandlers["SequenceMedia"].keys()):
@@ -537,17 +487,18 @@ def listDirectory(directory, streamingExtList=ExtensionHandlers["StreamingMedia"
     # The for loop will ensure that data is returned for every file in the fileList
 
 
-    file_info = [getFileInfoClass(f)(f) for f in fileList]
+    file_info = [getFileInfoClass(f)(f).parse(f) for f in fileList]
 
     # Prune empty lists from file_info, in cases where a file was passed to a parser
     # but returned empty (e.g. an R3D file other than _001.R3D)
     file_info = [i for i in file_info if len(i) != 0]
 
     if seqList:
-        import pdb; pdb.set_trace()
         seqList = [s for s in seqList if s[1][1:].upper() in sequenceExtList]
-        seq_info = [getFileInfoClass(f)(f) for f in seqList]
+
+        seq_info = [getFileInfoClass(f)(f).parse(f) for f in seqList]
         file_info = file_info + seq_info
+
 
 
     log("listDirectory: file_info = %s" % str(file_info))
